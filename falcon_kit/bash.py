@@ -200,11 +200,34 @@ while read fn; do  {cat_fasta} $fn | fasta2DB -v raw_reads -i${{fn##*/}}; done <
 #cat fc.fofn | xargs rm -f
 {DBsplit}
 {DBdust}
+
+# Run TANmask to mask tandem repeats.
+HPC.TANmask raw_reads > tanmask.sh
+sh tanmask.sh
+Catrack -v raw_reads tan
+rm .raw_reads.*.tan.*
+
+# Run 3 iterations of REPmask to mask interspered repeats.
+HPC.REPmask -g1 -c1000 -mtan raw_reads > repmask_1.sh
+sh repmask_1.sh
+Catrack -v raw_reads rep1
+rm .raw_reads.*.rep1.*
+
+HPC.REPmask -g5 -c4000 -mtan -mrep1 raw_reads > repmask_2.sh
+sh repmask_2.sh
+Catrack -v raw_reads rep5
+rm .raw_reads.*.rep5.*
+
+HPC.REPmask -g10 -c2500 -mtan -mrep1 -mrep5 raw_reads > repmask_3.sh
+sh repmask_3.sh
+Catrack -v raw_reads rep10
+rm .raw_reads.*.rep10.*
+
 LB={count}
 rm -f {run_jobs_bfn}
 CUTOFF={bash_cutoff}
 echo -n $CUTOFF >| length_cutoff
-HPC.daligner {pa_HPCdaligner_option} {mdust} -H$CUTOFF raw_reads {last_block}-$LB >| {run_jobs_bfn}
+HPC.daligner {pa_HPCdaligner_option} {mdust} -H$CUTOFF -mtan -mrep1 -mrep5 -mrep10 raw_reads {last_block}-$LB >| {run_jobs_bfn}
 """.format(**params)
     return script
     # Note: We dump the 'length_cutoff' file for later reference within the preassembly report
@@ -264,6 +287,20 @@ ln -sf ${{db_dir}}/.{db_prefix}.idx .
 ln -sf ${{db_dir}}/{db_prefix}.db .
 ln -sf ${{db_dir}}/.{db_prefix}.dust.anno .
 ln -sf ${{db_dir}}/.{db_prefix}.dust.data .
+
+# Get the DAMASKER annotation tracks
+ln -sf ${{db_dir}}/.{db_prefix}.tan.anno .
+ln -sf ${{db_dir}}/.{db_prefix}.tan.data .
+
+ln -sf ${{db_dir}}/.{db_prefix}.rep1.anno .
+ln -sf ${{db_dir}}/.{db_prefix}.rep1.data .
+
+ln -sf ${{db_dir}}/.{db_prefix}.rep5.anno .
+ln -sf ${{db_dir}}/.{db_prefix}.rep5.data .
+
+ln -sf ${{db_dir}}/.{db_prefix}.rep10.anno .
+ln -sf ${{db_dir}}/.{db_prefix}.rep10.data .
+
 {daligner_cmd}
 rm -f *.C?.las *.C?.S.las *.C??.las *.C??.S.las *.C???.las *.C???.S.las
 rm -f *.N?.las *.N?.S.las *.N??.las *.N??.S.las *.N???.las *.N???.S.las
