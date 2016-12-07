@@ -245,7 +245,30 @@ def script_build_pdb(config, input_fofn_bfn, run_jobs_bfn):
 while read fn; do fasta2DB -v preads $fn; done < {input_fofn_bfn}
 DBsplit {ovlp_DBsplit_option} preads
 LB={count}
-HPC.daligner {ovlp_HPCdaligner_option} -H{length_cutoff_pr} preads {last_block}-$LB >| {run_jobs_bfn}
+
+# Run TANmask to mask tandem repeats.
+HPC.TANmask preads > tanmask.sh
+sh tanmask.sh
+Catrack -v preads tan
+rm .preads.*.tan.*
+
+# Run 3 iterations of REPmask to mask interspered repeats.
+HPC.REPmask -g1 -c1000 -mtan preads > repmask_1.sh
+sh repmask_1.sh
+Catrack -v preads rep1
+rm .preads.*.rep1.*
+
+HPC.REPmask -g5 -c4000 -mtan -mrep1 preads > repmask_2.sh
+sh repmask_2.sh
+Catrack -v preads rep5
+rm .preads.*.rep5.*
+
+HPC.REPmask -g10 -c2500 -mtan -mrep1 -mrep5 preads > repmask_3.sh
+sh repmask_3.sh
+Catrack -v preads rep10
+rm .preads.*.rep10.*
+
+HPC.daligner {ovlp_HPCdaligner_option} -H{length_cutoff_pr} -mtan -mrep1 -mrep5 -mrep10 preads {last_block}-$LB >| {run_jobs_bfn}
 """.format(**params)
     return script
 
